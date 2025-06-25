@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from pyairtable import Api
 from pyairtable import Table   # new Airtable client
 
 print("[DEBUG] AIRTABLE_TOKEN =", os.getenv("AIRTABLE_TOKEN"))
@@ -38,7 +39,9 @@ CSV_PATH    = "applied_jobs.csv"
 AIRTABLE_TOKEN      = os.getenv("AIRTABLE_TOKEN")
 AIRTABLE_BASE_ID    = os.getenv("AIRTABLE_BASE_ID")
 AIRTABLE_TABLE_NAME = os.getenv("AIRTABLE_TABLE_NAME")
-airtable = Table(AIRTABLE_TOKEN, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
+api = Api(AIRTABLE_TOKEN)
+airtable = api.table(AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
+
 
 def load_applied_urls():
     if not os.path.exists(CSV_PATH):
@@ -90,43 +93,55 @@ def location_allowed(text):
 
 def scrape_remotive():
     print("[SCRAPE] Remotive...", flush=True)
-    url  = "https://remotive.io/remote-jobs/software-dev"
+    url = "https://remotive.com/remote-jobs/software-dev"  # updated to .com domain
     jobs = []
     try:
         r = requests.get(url, timeout=20)
         soup = BeautifulSoup(r.text, "html.parser")
-        for tile in soup.select("div.job-tile")[:MAX_RESULTS]:
-
-            # 1) Grab the raw title text, which now looks like "Title•Company"
-            raw = tile.select_one(".job-tile-title").get_text(strip=True)
-            if "•" in raw:
-                title_part, inline_company = [p.strip() for p in raw.split("•", 1)]
+        # Find all "See more >" links, which indicate a job listing entry
+        for see_more_a in soup.find_all('a', string="See more >")[:MAX_RESULTS]:
+            href = see_more_a.get("href", "")
+            if not href:
+                continue
+            # Build full Remotive job URL if relative
+            job_url = href if href.startswith("http") else f"https://remotive.com{href}"
+            # Navigate to the parent container (likely <li>) to get title and company text
+            li = see_more_a.find_parent('li')
+            if not li:
+                continue
+            # The title and company are contained in the first text anchor of the listing
+            # Find the first anchor in li that points to a Remotive job (skip logo anchors)
+            anchors = li.find_all('a')
+            title_anchor = None
+            for a in anchors:
+                if a.get("href", "").startswith("/remote-jobs/"):
+                    title_anchor = a
+                    break
+            if not title_anchor:
+                continue  # No title anchor found
+            raw_text = title_anchor.get_text(strip=True)
+            # raw_text example: "Senior Developer • CompanyName CompanyName"
+            if "•" in raw_text:
+                title_part, company_part = [p.strip() for p in raw_text.split("•", 1)]
             else:
-                title_part, inline_company = raw, ""
-
-            # 2) Try the old company selector
-            c_elem = tile.select_one(".job-tile-company")
-            if c_elem:
-                company = c_elem.get_text(strip=True)
-            # 3) Fallback to the inline_company if there
-            elif inline_company:
-                company = inline_company
+                title_part, company_part = raw_text, ""
+            # Clean up company name if duplicated (e.g. "Company X Company X")
+            company_name = company_part
+            if company_name:
+                words = company_name.split()
+                mid = len(words) // 2
+                if mid > 0 and len(words) % 2 == 0 and words[:mid] == words[mid:]:
+                    company_name = " ".join(words[:mid])
             else:
-                company = "Unknown"
-
-            # 4) Build the URL
-            link = tile.select_one("a")
-            href = link["href"]
-            full = href if href.startswith("http") else f"https://remotive.io{href}"
-
-            # 5) Filter on keywords+location
-            text = (title_part + " " + company + " " + full).lower()
+                company_name = "Unknown"
+            # Keyword + location filter
+            text = f"{title_part} {company_name} {job_url}".lower()
             if any(kw in text for kw in KEYWORDS) and location_allowed(text):
-                jobs.append({"url": full, "title": title_part, "company": company})
-
+                jobs.append({"url": job_url, "title": title_part, "company": company_name})
     except Exception as e:
         print(f"[ERROR] Remotive: {e}", flush=True)
     return jobs
+
 
 def scrape_remoteok():
     print("[SCRAPE] RemoteOK...", flush=True)
