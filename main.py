@@ -96,17 +96,34 @@ def scrape_remotive():
         r = requests.get(url, timeout=20)
         soup = BeautifulSoup(r.text, "html.parser")
         for tile in soup.select("div.job-tile")[:MAX_RESULTS]:
-            t = tile.select_one(".job-tile-title")
-            l = tile.select_one("a")
-            c = tile.select_one(".job-tile-company")
-            if not (t and l): continue
-            title = t.get_text(strip=True)
-            company = c.get_text(strip=True) if c else "Unknown"
-            href = l["href"]
+
+            # 1) Grab the raw title text, which now looks like "Title•Company"
+            raw = tile.select_one(".job-tile-title").get_text(strip=True)
+            if "•" in raw:
+                title_part, inline_company = [p.strip() for p in raw.split("•", 1)]
+            else:
+                title_part, inline_company = raw, ""
+
+            # 2) Try the old company selector
+            c_elem = tile.select_one(".job-tile-company")
+            if c_elem:
+                company = c_elem.get_text(strip=True)
+            # 3) Fallback to the inline_company if there
+            elif inline_company:
+                company = inline_company
+            else:
+                company = "Unknown"
+
+            # 4) Build the URL
+            link = tile.select_one("a")
+            href = link["href"]
             full = href if href.startswith("http") else f"https://remotive.io{href}"
-            text = (title + " " + company + " " + full).lower()
+
+            # 5) Filter on keywords+location
+            text = (title_part + " " + company + " " + full).lower()
             if any(kw in text for kw in KEYWORDS) and location_allowed(text):
-                jobs.append({"url": full, "title": title, "company": company})
+                jobs.append({"url": full, "title": title_part, "company": company})
+
     except Exception as e:
         print(f"[ERROR] Remotive: {e}", flush=True)
     return jobs
