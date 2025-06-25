@@ -92,51 +92,23 @@ def location_allowed(text):
 
 def scrape_remotive():
     print("[SCRAPE] Remotive...", flush=True)
-    url = "https://remotive.com/remote-jobs/data"  # updated to data category on .com domain
+    url  = "https://remotive.com/remote-jobs/data"
     jobs = []
     try:
         r = requests.get(url, timeout=20)
         soup = BeautifulSoup(r.text, "html.parser")
-        # Find all "See more >" links, which indicate a job listing entry
-        for see_more_a in soup.find_all('a', string="See more >")[:MAX_RESULTS]:
-            href = see_more_a.get("href", "")
-            if not href:
-                continue
-            # Build full Remotive job URL if relative
-            job_url = href if href.startswith("http") else f"https://remotive.com{href}"
-            # Navigate to the parent container (likely <li>) to get title and company text
-            li = see_more_a.find_parent('li')
-            if not li:
-                continue
-            # The title and company are contained in the first text anchor of the listing
-            # Find the first anchor in li that points to a Remotive job (skip logo anchors)
-            anchors = li.find_all('a')
-            title_anchor = None
-            for a in anchors:
-                if a.get("href", "").startswith("/remote-jobs/"):
-                    title_anchor = a
-                    break
-            if not title_anchor:
-                continue  # No title anchor found
-            raw_text = title_anchor.get_text(strip=True)
-            # raw_text example: "Senior Developer • CompanyName CompanyName"
-            if "•" in raw_text:
-                title_part, company_part = [p.strip() for p in raw_text.split("•", 1)]
-            else:
-                title_part, company_part = raw_text, ""
-            # Clean up company name if duplicated (e.g. "Company X Company X")
-            company_name = company_part
-            if company_name:
-                words = company_name.split()
-                mid = len(words) // 2
-                if mid > 0 and len(words) % 2 == 0 and words[:mid] == words[mid:]:
-                    company_name = " ".join(words[:mid])
-            else:
-                company_name = "Unknown"
-            # Keyword + location filter
-            text = f"{title_part} {company_name} {job_url}".lower()
+        for tile in soup.select("div.job-tile")[:MAX_RESULTS]:
+            t = tile.select_one(".job-tile-title")
+            l = tile.select_one("a")
+            c = tile.select_one(".job-tile-company")
+            if not (t and l): continue
+            title = t.get_text(strip=True)
+            company = c.get_text(strip=True) if c else "Unknown"
+            href = l["href"]
+            full = href if href.startswith("http") else f"https://remotive.io{href}"
+            text = (title + " " + company + " " + full).lower()
             if any(kw in text for kw in KEYWORDS) and location_allowed(text):
-                jobs.append({"url": job_url, "title": title_part, "company": company_name})
+                jobs.append({"url": full, "title": title, "company": company})
     except Exception as e:
         print(f"[ERROR] Remotive: {e}", flush=True)
     return jobs
