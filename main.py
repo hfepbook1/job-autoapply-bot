@@ -234,6 +234,9 @@ def get_jobs():
     return unique
 
 
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
 def apply_to_job(job):
     print(f"[AUTO] Applying → {job['url']}", flush=True)
     opts = Options()
@@ -241,27 +244,61 @@ def apply_to_job(job):
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     driver = webdriver.Chrome(options=opts)
+
     try:
         driver.get(job["url"])
-        time.sleep(4)
+        # 1) Wait for page load and forms to appear
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "input"))
+        )
+
+        # 2) Fill out inputs (email, name, phone)
         for inp in driver.find_elements(By.TAG_NAME, "input"):
-            name = inp.get_attribute("name") or ""
-            if "email" in name.lower():
-                inp.send_keys(USER_DATA.get("email",""))
-            elif "name" in name.lower():
-                inp.send_keys(USER_DATA.get("full_name",""))
-            elif "phone" in name.lower():
-                inp.send_keys(USER_DATA.get("phone",""))
+            name = (inp.get_attribute("name") or "").lower()
+            if "email" in name:
+                inp.send_keys(USER_DATA.get("email", ""))
+            elif "name" in name:
+                inp.send_keys(USER_DATA.get("full_name", ""))
+            elif "phone" in name:
+                inp.send_keys(USER_DATA.get("phone", ""))
+
+        # 3) Upload resume
         for f in driver.find_elements(By.CSS_SELECTOR, "input[type='file']"):
             f.send_keys(os.path.abspath(RESUME_PATH))
-        for btn in driver.find_elements(By.TAG_NAME, "button"):
-            t = btn.text.lower()
-            if "submit" in t or "apply" in t:
-                btn.click()
-                break
+
+        # 4) Find the real “Apply” element
+        apply_btn = None
+        # try standard <button>
+        try:
+            apply_btn = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH,
+                   "//button[contains(translate(., 'APPLY', 'apply'),'apply')]" ))
+            )
+        except:
+            pass
+
+        # fallback: some sites use <a> with “apply”
+        if not apply_btn:
+            try:
+                apply_btn = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH,
+                        "//a[contains(translate(., 'APPLY', 'apply'),'apply')]" ))
+                )
+            except:
+                pass
+
+        if not apply_btn:
+            print("[AUTO ERROR] Could not find an APPLY button, skipping.", flush=True)
+            return
+
+        # 5) Scroll & click via JS
+        driver.execute_script("arguments[0].scrollIntoView(true);", apply_btn)
+        driver.execute_script("arguments[0].click();", apply_btn)
         print("[AUTO] Success", flush=True)
+
     except Exception as e:
         print(f"[AUTO ERROR] {e}", flush=True)
+
     finally:
         driver.quit()
 
