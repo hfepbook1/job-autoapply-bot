@@ -90,10 +90,9 @@ def location_allowed(text):
     return False
 
 
-
 def scrape_remotive():
     print("[SCRAPE] Remotive...", flush=True)
-    url = "https://remotive.com/remote-jobs/software-dev"  # updated to .com domain
+    url = "https://remotive.com/remote-jobs/data"  # updated to data category on .com domain
     jobs = []
     try:
         r = requests.get(url, timeout=20)
@@ -142,18 +141,18 @@ def scrape_remotive():
         print(f"[ERROR] Remotive: {e}", flush=True)
     return jobs
 
-
 def scrape_remoteok():
     print("[SCRAPE] RemoteOK...", flush=True)
-    url = "https://remoteok.io/remote-dev-jobs"
+    url = "https://remoteok.com/remote-data-science-jobs"
     jobs = []
     try:
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
         soup = BeautifulSoup(r.text, "html.parser")
         for row in soup.select("tr.job")[:MAX_RESULTS]:
             l = row.select_one("a.preventLink")
-            if not l: continue
-            full_url = "https://remoteok.io" + l["href"]
+            if not l:
+                continue
+            full_url = "https://remoteok.com" + l["href"]
             title = row.get("data-position", "Remote Job")
             company = row.get("data-company", "Unknown")
             text = (title + " " + company + " " + full_url).lower()
@@ -172,7 +171,8 @@ def scrape_weworkremotely():
         soup = BeautifulSoup(r.text, "html.parser")
         for sec in soup.select("section.jobs li.feature")[:MAX_RESULTS]:
             l = sec.select_one("a")
-            if not l: continue
+            if not l:
+                continue
             href = l["href"]
             full_url = "https://weworkremotely.com" + href
             title = sec.get_text(strip=True)
@@ -185,14 +185,15 @@ def scrape_weworkremotely():
 
 def scrape_jobspresso():
     print("[SCRAPE] Jobspresso...", flush=True)
-    url = "https://jobspresso.co/remote-developer-jobs/"
+    url = "https://jobspresso.co/remote-ai-data-jobs/"
     jobs = []
     try:
         r = requests.get(url, timeout=20)
         soup = BeautifulSoup(r.text, "html.parser")
         for li in soup.select("ul.jobs li.job_listing")[:MAX_RESULTS]:
             a = li.select_one("a")
-            if not a: continue
+            if not a:
+                continue
             href = a["href"]
             title = a.get("title", "Remote Job")
             company = li.select_one(".company")
@@ -206,14 +207,15 @@ def scrape_jobspresso():
 
 def scrape_remoteco():
     print("[SCRAPE] Remote.co...", flush=True)
-    url = "https://remote.co/remote-jobs/developer/"
+    url = "https://remote.co/remote-jobs/data-science/"
     jobs = []
     try:
         r = requests.get(url, timeout=20)
         soup = BeautifulSoup(r.text, "html.parser")
         for row in soup.select("li.job_listing")[:MAX_RESULTS]:
             a = row.select_one("a")
-            if not a: continue
+            if not a:
+                continue
             href = a["href"]
             title = a.get("title", "Remote Job")
             company = row.select_one(".company")
@@ -224,7 +226,6 @@ def scrape_remoteco():
     except Exception as e:
         print(f"[ERROR] Remote.co: {e}", flush=True)
     return jobs
-
 
 
 def get_jobs():
