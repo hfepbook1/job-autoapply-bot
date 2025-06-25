@@ -229,27 +229,34 @@ def apply_to_job(job):
     driver = webdriver.Chrome(options=opts)
 
     try:
-        # 1) Go to the Remotive detail page
+        # 1) Load the Remotive detail page
         driver.get(job["url"])
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.TAG_NAME, "body"))
         )
 
-        # 2) Click the "Apply for this position" link to go off-site
+        # 2) Click the off-site “Apply” link (Lever, Greenhouse, etc.)
         try:
+            # just one wait using partial link text
             apply_link = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.LINK_TEXT, "Apply for this position"))
+                EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Apply"))
             )
             apply_link.click()
-            # 3) Wait for the URL to change (i.e. we’re on Lever/Greenhouse/etc.)
-            WebDriverWait(driver, 10).until(
-                EC.url_changes(job["url"])
-            )
-            print("[AUTO] Redirected to external ATS:", driver.current_url, flush=True)
-        except Exception:
-            print("[AUTO WARNING] Couldn't find off-site apply link, falling back to generic button", flush=True)
 
-        # 4) Now we’re on the real application form—fill inputs there:
+            # 3) If a new tab opened, switch to it
+            WebDriverWait(driver, 5).until(lambda d: len(d.window_handles) > 1)
+            driver.switch_to.window(driver.window_handles[-1])
+
+            # 4) Wait for the external page to load
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            print("[AUTO] On external ATS:", driver.current_url, flush=True)
+
+        except Exception:
+            print("[AUTO WARNING] Off-site link not found or timeout; falling back", flush=True)
+
+        # 5) Fill the real ATS form
         for inp in driver.find_elements(By.TAG_NAME, "input"):
             name = (inp.get_attribute("name") or "").lower()
             if "email" in name:
@@ -259,19 +266,20 @@ def apply_to_job(job):
             elif "phone" in name:
                 inp.send_keys(USER_DATA.get("phone", ""))
 
-        # Attach resume
+        # upload resume
         for f in driver.find_elements(By.CSS_SELECTOR, "input[type='file']"):
             f.send_keys(os.path.abspath(RESUME_PATH))
 
-        # 5) Finally, attempt the generic submit/apply on the ATS form
-        # (many ATS use a <button> or <input type="submit">)
+        # 6) Submit on the ATS
         submit = None
-        for selector in [
+        # look for the most common selectors in order
+        candidates = [
             ("//button[contains(text(),'Submit')]", By.XPATH),
             ("//button[contains(text(),'Apply')]", By.XPATH),
-            ("input[type='submit']", By.CSS_SELECTOR)
-        ]:
-            els = driver.find_elements(selector[1], selector[0])
+            ("input[type='submit']", By.CSS_SELECTOR),
+        ]
+        for sel, by in candidates:
+            els = driver.find_elements(by, sel)
             for el in els:
                 if el.is_displayed() and el.is_enabled():
                     submit = el
@@ -292,6 +300,7 @@ def apply_to_job(job):
 
     finally:
         driver.quit()
+
 
 '''
 def apply_to_job_(job):
