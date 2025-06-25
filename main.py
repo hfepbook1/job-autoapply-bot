@@ -92,33 +92,34 @@ def scrape_remotive():
 
         for a in soup.find_all('a', href=True):
             href = a['href']
-            # only job-title anchors start with /remote-jobs/ and contain “•”
-            if not href.startswith("/remote-jobs/") or "•" not in a.get_text():
+            if not href.startswith("/remote-jobs/data/"):
+                continue                      # not a job link
+
+            title_part = a.get_text(" ", strip=True)   # collapse \n to space
+            if not title_part or len(title_part) < 5:  # sanity check
                 continue
 
-            raw = a.get_text(strip=True)  # e.g. "Data Analyst • Acme Acme"
-            title_part, company_part = [p.strip() for p in raw.split("•", 1)]
+            # company is the next <span> sibling if present
+            company_span = a.find_next("span")
+            company = company_span.get_text(strip=True) if company_span else "Unknown"
 
-            # dedupe company if it repeats
-            company = company_part or "Unknown"
+            # dedupe “Acme Acme” → “Acme”
             words = company.split()
-            mid = len(words) // 2
-            if mid > 0 and len(words) % 2 == 0 and words[:mid] == words[mid:]:
+            mid   = len(words)//2
+            if mid and len(words)%2==0 and words[:mid]==words[mid:]:
                 company = " ".join(words[:mid])
 
-            job_url = href if href.startswith("http") else f"https://remotive.com{href}"
-            text    = f"{title_part} {company} {job_url}".lower()
+            job_url = f"https://remotive.com{href}"
+            text    = f"{title_part} {company}".lower()
 
             if any(kw in text for kw in KEYWORDS) and location_allowed(text):
-                jobs.append({
-                    "url":     job_url,
-                    "title":   title_part,
-                    "company": company
-                })
+                jobs.append({"url": job_url,
+                             "title": title_part,
+                             "company": company})
 
     except Exception as e:
         print(f"[ERROR] Remotive: {e}", flush=True)
-
+    print(f"[DEBUG] Remotive found {len(jobs)} data jobs after filter", flush=True)
     return jobs
 
 
