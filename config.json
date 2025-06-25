@@ -1,12 +1,12 @@
 {
-  "keywords": ["python", "automation", "entry level", "remote", "developer", "ai", "it"],
+  "keywords": ["python", "data scientist", "data analyst", "senior data analyst", "SQL", "dashboard"],
   "max_results": 50,
   "resume_path": "resume.pdf",
   "user_data": {
-    "full_name": "Jesse Torres",
-    "email": "jessetorres386@gmail.com",
-    "phone": "3234723070",
-    "linkedin": "https://www.linkedin.com/in/jesse-torres11/"
+    "full_name": "Hsiang-Lun Kao",
+    "email": "davidkao030994@gmail.com",
+    "phone": "6467502493",
+    "linkedin": "https://www.linkedin.com/in/hsianglunkao/"
   },
   "location_filter": ""
 
