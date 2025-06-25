@@ -89,38 +89,38 @@ def scrape_remotive():
     try:
         r = requests.get(url, timeout=20)
         soup = BeautifulSoup(r.text, "html.parser")
-        for see_more in soup.find_all('a', string="See more >")[:MAX_RESULTS]:
-            href = see_more.get("href", "")
-            if not href:
+
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            # only job-title anchors start with /remote-jobs/ and contain “•”
+            if not href.startswith("/remote-jobs/") or "•" not in a.get_text():
                 continue
-            job_url = href if href.startswith("http") else f"https://remotive.com{href}"
-            li = see_more.find_parent('li')
-            if not li:
-                continue
-            # find first job link
-            title_anchor = next(
-                (a for a in li.find_all('a') if a.get("href","").startswith("/remote-jobs/")),
-                None
-            )
-            if not title_anchor:
-                continue
-            raw = title_anchor.get_text(strip=True)
-            if "•" in raw:
-                title_part, company_part = [p.strip() for p in raw.split("•",1)]
-            else:
-                title_part, company_part = raw, ""
-            # dedupe company if repeated
+
+            raw = a.get_text(strip=True)  # e.g. "Data Analyst • Acme Acme"
+            title_part, company_part = [p.strip() for p in raw.split("•", 1)]
+
+            # dedupe company if it repeats
             company = company_part or "Unknown"
             words = company.split()
-            mid = len(words)//2
-            if mid>0 and len(words)%2==0 and words[:mid]==words[mid:]:
+            mid = len(words) // 2
+            if mid > 0 and len(words) % 2 == 0 and words[:mid] == words[mid:]:
                 company = " ".join(words[:mid])
-            text = f"{title_part} {company} {job_url}".lower()
+
+            job_url = href if href.startswith("http") else f"https://remotive.com{href}"
+            text    = f"{title_part} {company} {job_url}".lower()
+
             if any(kw in text for kw in KEYWORDS) and location_allowed(text):
-                jobs.append({"url": job_url, "title": title_part, "company": company})
+                jobs.append({
+                    "url":     job_url,
+                    "title":   title_part,
+                    "company": company
+                })
+
     except Exception as e:
         print(f"[ERROR] Remotive: {e}", flush=True)
+
     return jobs
+
 
 def scrape_remoteok():
     print("[SCRAPE] RemoteOK...", flush=True)
